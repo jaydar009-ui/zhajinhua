@@ -1,0 +1,114 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>炸金花 V5.4 牌角识别版</title><style>*{box-sizing:border-box}body{margin:0;background:#101820;color:#fff;font-family:system-ui,sans-serif}.wrap{max-width:720px;margin:auto;padding:14px}.box{background:#17232d;border-radius:18px;padding:14px;margin-bottom:12px}h1{font-size:22px;margin:3px 0 8px}.muted{color:#aebbc5;font-size:13px;line-height:1.5}video{width:100%;aspect-ratio:4/3;background:#000;border-radius:14px;object-fit:cover}.guide{position:relative}.guide:after{content:"";position:absolute;left:18%;right:18%;top:13%;bottom:13%;border:2px solid white;border-radius:12px;pointer-events:none}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}button,select{border:0;border-radius:12px;padding:11px 14px;font-size:16px;background:#2b4050;color:#fff}button.primary{background:#1976d2}button.ok{background:#2e8b57}button.danger{background:#a63b3b}button:disabled{opacity:.4}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{font-size:13px;color:#b9c5cc;display:block;margin-bottom:5px}.result{font-size:30px;text-align:center;padding:12px;background:#0d151c;border-radius:14px;margin-top:10px;font-weight:700}.player{background:#0d151c;border-radius:14px;padding:10px;margin-top:8px}.phead{display:flex;justify-content:space-between;font-weight:700}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.chip{background:#263947;padding:7px 9px;border-radius:9px}.winner{outline:2px solid #ffd54a}canvas{display:none}</style></head><body><div class="wrap"><div class="box"><h1>🃏 炸金花 · V5.4 牌角识别版</h1><div class="muted">每次拍一张牌 → 确认牌面 → 分配玩家 → 自动记录。新增试验性点数识别，识别结果需要人工核对，花色仍需手动确认。</div></div><div class="box"><div class="guide"><video id="video" autoplay playsinline muted></video></div><canvas id="canvas"></canvas><div class="row"><button id="start" class="primary">📷 打开摄像头</button><button id="stop">关闭</button><button id="shot" class="ok" disabled>拍这一张</button></div><div id="status" class="muted" style="margin-top:8px">尚未打开摄像头</div></div><div class="box"><div class="grid"><div><label>这张牌给谁</label><select id="player"></select></div><div><label>牌点数</label><select id="rank"></select></div></div><div class="row" id="suits"></div><div id="result" class="result">等待拍摄</div><div class="row"><button id="confirm" class="ok" disabled>✅ 确认记录</button><button id="retake" disabled>🔄 重拍</button></div><div class="muted" style="margin-top:8px">拍摄后请确认牌面。识别结果仅供参考，请人工核对牌面和花色。</div></div><div class="box"><div class="row"><button id="newRound" class="primary">新开一局</button><button id="undo">撤销最后一张</button><button id="clear" class="danger">清空本局</button></div><div id="players"></div></div></div><script>
+const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];let stream=null,players=4,hands=Array.from({length:players},()=>[]),history=[];const $=s=>document.querySelector(s),video=$('#video'),canvas=$('#canvas');for(let i=0;i<players;i++)$('#player').innerHTML+=`<option value="${i}">玩家 ${i+1}</option>`;ranks.forEach(r=>$('#rank').innerHTML+=`<option>${r}</option>`);suits.forEach((s,i)=>{let b=document.createElement('button');b.textContent=s;b.dataset.s=s;if(i===0)b.className='primary';b.onclick=()=>{document.querySelectorAll('#suits button').forEach(x=>x.classList.remove('primary'));b.classList.add('primary');show()};$('#suits').appendChild(b)});function card(){return $('#rank').value+(document.querySelector('#suits button.primary')?.dataset.s||'♠')}function show(){$('#result').textContent=card()}$('#rank').onchange=show;$('#start').onclick=async()=>{try{if(!navigator.mediaDevices?.getUserMedia)throw Error('此页面需要 HTTPS 或 localhost 安全环境，直接打开本地 HTML 可能无法使用摄像头');stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=stream;$('#shot').disabled=false;$('#status').textContent='摄像头已打开，把单张牌放进白框后点击“拍这一张”。'}catch(e){$('#status').textContent='无法打开摄像头：'+(e.message||e.name)+'。请在 HTTPS 网站中打开并允许权限。'}};$('#stop').onclick=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;$('#shot').disabled=true;$('#status').textContent='摄像头已关闭'};$('#shot').onclick=()=>{if(!stream||!video.videoWidth){$('#status').textContent='摄像头画面尚未准备好，请稍后重试';return}canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);show();$('#confirm').disabled=false;$('#retake').disabled=false;$('#status').textContent='已拍摄，请确认牌面；不对可以修改或重拍。'};$('#retake').onclick=()=>{$('#confirm').disabled=true;$('#retake').disabled=true;$('#result').textContent='等待重新拍摄';$('#status').textContent='请重新拍摄这一张。'};$('#confirm').onclick=()=>{let p=+$('#player').value,c=card();if(hands.flat().includes(c)){alert('这张牌已经记录过，不能重复。');return}if(hands[p].length>=3){alert('玩家 '+(p+1)+' 已有3张牌。');return}hands[p].push(c);history.push(p);$('#confirm').disabled=true;$('#retake').disabled=true;$('#result').textContent='已确认：'+c;$('#status').textContent='已记录，可以拍下一张。';render()};$('#undo').onclick=()=>{if(history.length){hands[history.pop()].pop();render()}};$('#clear').onclick=()=>{if(confirm('确定清空本局吗？')){hands=Array.from({length:players},()=>[]);history=[];render()}};$('#newRound').onclick=()=>{hands=Array.from({length:players},()=>[]);history=[];$('#result').textContent='等待拍摄';$('#status').textContent='新的一局已开始。';render()};function val(r){return r==='A'?14:r==='K'?13:r==='Q'?12:r==='J'?11:+r}function ev(a){
+ if(a.length<3)return{name:'等待3张牌',score:0};
+ const n=a.map(c=>val(c.slice(0,-1))).sort((x,y)=>y-x);
+ const suitsNow=a.map(c=>c.slice(-1));
+ const flush=suitsNow.every(x=>x===suitsNow[0]);
+ const uniq=[...new Set(n)];
+ const straight=uniq.length===3&&(n[0]-n[2]===2||(n[0]===14&&n[1]===3&&n[2]===2));
+ const high=n[0]===14&&n[1]===3&&n[2]===2?3:n[0];
+ const counts={};n.forEach(x=>counts[x]=(counts[x]||0)+1);
+ const triples=Object.keys(counts).map(Number).find(x=>counts[x]===3);
+ const pair=Object.keys(counts).map(Number).find(x=>counts[x]===2);
+ const pack=(category,arr)=>arr.reduce((score,v)=>score*15+v,category*15**3);
+ if(triples)return{name:'豹子',score:pack(6,[triples,0,0])};
+ if(straight&&flush)return{name:'同花顺',score:pack(5,[high,0,0])};
+ if(flush)return{name:'同花',score:pack(4,n)};
+ if(straight)return{name:'顺子',score:pack(3,[high,0,0])};
+ if(pair)return{name:'对子',score:pack(2,[pair,n.find(x=>x!==pair),0])};
+ return{name:'单牌',score:pack(1,n)};
+}
+function render(){let rs=hands.map(ev),m=Math.max(...rs.map(x=>x.score),0);$('#players').innerHTML='';hands.forEach((h,i)=>{let d=document.createElement('div');d.className='player'+(h.length===3&&rs[i].score===m?' winner':'');d.innerHTML=`<div class="phead"><span>玩家 ${i+1}</span><span>${rs[i].name}</span></div><div class="chips">${h.length?h.map(c=>`<span class="chip">${c}</span>`).join(''):'<span class="muted">还没有牌</span>'}</div>`;$('#players').appendChild(d)});let w=rs.map((r,i)=>r.score===m&&hands[i].length===3?i+1:null).filter(Boolean);if(w.length)$('#players').insertAdjacentHTML('afterbegin',`<div class="result" style="font-size:22px">🏆 当前最大：玩家 ${w.join('、')}</div>`)}
+render();</script>
+<style>
+#ocrpanel{background:#17232d;border-radius:16px;padding:12px;margin:12px 0}
+#preview{display:none;width:100%;max-height:240px;object-fit:contain;background:#000;border-radius:10px}
+#ocrinfo{font-size:14px;color:#e1c781;margin:8px 0}
+</style>
+<script>
+(function(){
+const shot=document.getElementById('shot'), status=document.getElementById('status');
+const result=document.getElementById('result'), confirmBtn=document.getElementById('confirm');
+const rank=document.getElementById('rank'), suits=document.getElementById('suits');
+const panel=document.createElement('div');
+panel.id='ocrpanel';
+panel.innerHTML='<b>🔎 V5.4 牌角识别</b><p id="ocrinfo">先打开摄像头，再拍一张正面朝上的牌。首次识别需要联网加载 OCR，可能稍慢。</p><img id="preview" alt="本次拍摄画面"><p style="font-size:12px;color:#aebbc5">牌角 OCR 是试验功能，不能保证正确；请核对点数和花色。尽量让单张牌占满白框并保持牌角清晰。</p>';
+document.querySelector('.guide').parentElement.after(panel);
+let version=0, pending=false, loaded=null;
+function message(t){document.getElementById('ocrinfo').textContent=t}
+function loadOCR(){
+ if(window.Tesseract)return Promise.resolve(window.Tesseract);
+ if(loaded)return loaded;
+ loaded=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+  script.onload=()=>window.Tesseract?resolve(window.Tesseract):reject(Error('OCR 未加载'));
+  script.onerror=()=>reject(Error('网络无法加载识别库'));
+  document.head.appendChild(script);
+ }).catch(e=>{loaded=null;throw e});
+ return loaded;
+}
+// Capture a frame, then OCR multiple likely corner crops instead of the whole card artwork.
+function crop(source,x,y,w,h,rotation){
+ const c=document.createElement('canvas');c.width=400;c.height=520;
+ const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
+ g.translate(c.width/2,c.height/2);g.rotate(rotation*Math.PI/180);
+ g.drawImage(source,x,y,w,h,-180,-230,360,460);
+ return c;
+}
+function candidates(cv){
+ const w=cv.width,h=cv.height;
+ // Four corners of the central guide and both ends of a rotated card.
+ const rects=[
+ [0.19,0.14,.25,.33,0],[.56,.14,.25,.33,0],
+ [.19,.53,.25,.33,180],[.56,.53,.25,.33,180],
+ [.30,.23,.22,.32,0],[.48,.44,.22,.32,180]
+ ];
+ return rects.map(([x,y,cw,ch,rot])=>crop(cv,x*w,y*h,cw*w,ch*h,rot));
+}
+function parseRank(t){
+ const raw=t.toUpperCase().replace(/\s+/g,'').replace(/O/g,'0');
+ const matches=raw.match(/10|[AJQK2-9]/g)||[];
+ const counts={};matches.forEach(x=>counts[x]=(counts[x]||0)+1);
+ return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
+}
+const oldShot=shot.onclick;
+shot.onclick=async function(){
+ oldShot();
+ const cv=document.getElementById('canvas');
+ if(!cv.width||!cv.height||shot.disabled)return;
+ const ticket=++version;
+ const img=document.getElementById('preview');
+ img.src=cv.toDataURL('image/jpeg',.8);img.style.display='block';
+ confirmBtn.disabled=true;pending=true;
+ message('正在分别检查牌角，请稍候……');
+ try{
+  const T=await loadOCR();const worker=await T.createWorker('eng');
+  try{
+   await worker.setParameters({tessedit_char_whitelist:'A23456789JQK10',tessedit_pageseg_mode:T.PSM?.SINGLE_WORD||'8'});
+   const votes=[];
+   for(const sample of candidates(cv)){
+    if(ticket!==version)return;
+    const o=await worker.recognize(sample);
+    const r=parseRank(o.data.text||'');if(r)votes.push(r);
+   }
+   if(ticket!==version)return;
+   const counts={};votes.forEach(r=>counts[r]=(counts[r]||0)+1);
+   const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+   if(sorted.length&&sorted[0][1]>=2&&(!sorted[1]||sorted[0][1]>sorted[1][1])){
+    rank.value=sorted[0][0];rank.dispatchEvent(new Event('change'));
+    message('候选点数：'+sorted[0][0]+'（'+sorted[0][1]+'次匹配）。请核对真实牌面和花色，再确认。');
+   }else{
+    message('牌角识别不确定（候选：'+(votes.join('、')||'无')+'），请手动选择点数和花色。');
+   }
+  }finally{await worker.terminate()}
+ }catch(e){if(ticket===version)message('识别未完成：'+e.message+'。请手动选择牌面。')}
+ finally{if(ticket===version){pending=false;confirmBtn.disabled=false;status.textContent='请核对牌面后确认记录。'}}
+};
+const oldRetake=document.getElementById('retake').onclick;
+document.getElementById('retake').onclick=function(){version++;pending=false;message('等待重新拍摄。');oldRetake()};
+const oldConfirm=confirmBtn.onclick;
+confirmBtn.onclick=function(){if(pending)return;oldConfirm()};
+})();
+</script>
+</body></html>
